@@ -13,5 +13,8 @@ class Settings(BaseSettings):
     postgres_host: str = "127.0.0.1"
     postgres_port: int = 5432
 
+    elasticsearch_url: str = "http://127.0.0.1:9200"
+    elasticsearch_index: str = "documents"
+
 
 settings = Settings()
