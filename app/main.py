@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+from elastic_transport import TransportError
 from elasticsearch import ApiError, AsyncElasticsearch
 from fastapi import FastAPI, HTTPException, Query, Request
 from sqlalchemy import select, text
@@ -58,7 +59,7 @@ async def search_documents(
             client,
             query=q.strip(),
         )
-    except (ApiError, AsyncElasticsearch) as exc:
+    except (ApiError, TransportError) as exc:
         raise HTTPException(
             status_code=503,
             detail="Search service unavailable",
