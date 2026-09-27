@@ -52,6 +52,7 @@ async def health():
 
     return {"status": "ok", "database": "ok"}
 
+
 @app.get(
     "/documents/search",
     response_model=list[DocumentResponse],
