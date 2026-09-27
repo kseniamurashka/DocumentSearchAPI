@@ -1,7 +1,12 @@
 import pytest
 
+
+from elastic_transport import ConnectionError
+from unittest.mock import AsyncMock
+
 from app.config import settings
 from app.models import Document
+
 
 
 @pytest.mark.asyncio
@@ -95,19 +100,19 @@ async def test_delete_removes_document_from_both_storages(
     assert response.status_code == 204
     assert response.content == b""
 
-    # Проверяем результат в новой сессии PostgreSQL.
+    # Проверяем результат в новой сессии PostgreSQL
     async with test_session_factory() as session:
         document = await session.get(Document, document_id)
         assert document is None
 
-    # Проверяем результат в Elasticsearch.
+    # Проверяем результат в Elasticsearch
     exists = await test_elasticsearch.exists(
         index=settings.elasticsearch_index,
         id=str(document_id),
     )
     assert not exists
 
-    # Повторное удаление должно сообщить об отсутствии документа.
+    # Повторное удаление должно сообщить об отсутствии документа
     repeated_response = await integration_client.delete(
         f"/documents/{document_id}",
     )
@@ -116,3 +121,69 @@ async def test_delete_removes_document_from_both_storages(
     assert repeated_response.json() == {
         "detail": "Document not found",
     }
+
+
+@pytest.mark.asyncio
+async def test_delete_keeps_document_when_elasticsearch_fails(
+    integration_client,
+    seeded_documents,
+    test_session_factory,
+    monkeypatch,
+):
+    document_id = 25
+
+    delete_mock = AsyncMock(
+        side_effect=ConnectionError("Elasticsearch unavailable"),
+    )
+
+    monkeypatch.setattr(
+        "app.main.delete_document_from_index",
+        delete_mock,
+    )
+
+    response = await integration_client.delete(
+        f"/documents/{document_id}",
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Search service unavailable",
+    }
+
+    async with test_session_factory() as session:
+        document = await session.get(Document, document_id)
+        assert document is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_succeeds_when_document_is_missing_from_index(
+    integration_client,
+    seeded_documents,
+    test_session_factory,
+    test_elasticsearch,
+):
+    document_id = 25
+
+    # в PostgreSQL запись будет, а в индексе - нет.
+    await test_elasticsearch.delete(
+        index=settings.elasticsearch_index,
+        id=str(document_id),
+        refresh="wait_for",
+    )
+
+    response = await integration_client.delete(
+        f"/documents/{document_id}",
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+    async with test_session_factory() as session:
+        document = await session.get(Document, document_id)
+        assert document is None
+
+    exists = await test_elasticsearch.exists(
+        index=settings.elasticsearch_index,
+        id=str(document_id),
+    )
+    assert not exists
