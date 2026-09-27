@@ -1,4 +1,5 @@
 from elasticsearch import AsyncElasticsearch
+from elasticsearch.helpers import async_scan
 
 from app.config import settings
 
@@ -26,3 +27,26 @@ async def ensure_index(client: AsyncElasticsearch) -> None:
             },
         },
     )
+
+async def search_document_ids(
+    client: AsyncElasticsearch,
+    query: str,
+) -> list[int]:
+    document_ids = []
+
+    async for hit in async_scan(
+        client,
+        index=settings.elasticsearch_index,
+        query={
+            "query": {
+                "match": {
+                    "text": query
+                },
+            },
+            "_source": False,
+        },
+        size=500,
+    ):
+        document_ids.append(int(hit["_id"]))
+
+    return document_ids
