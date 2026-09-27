@@ -1,4 +1,4 @@
-from elasticsearch import AsyncElasticsearch
+from elasticsearch import AsyncElasticsearch, NotFoundError
 from elasticsearch.helpers import async_scan
 
 from app.config import settings
@@ -28,6 +28,7 @@ async def ensure_index(client: AsyncElasticsearch) -> None:
         },
     )
 
+
 async def search_document_ids(
     client: AsyncElasticsearch,
     query: str,
@@ -50,3 +51,23 @@ async def search_document_ids(
         document_ids.append(int(hit["_id"]))
 
     return document_ids
+
+
+async def delete_document_from_index(
+    client: AsyncElasticsearch,
+    document_id: int,
+) -> None:
+    try:
+        await client.delete(
+            index=settings.elasticsearch_index,
+            id=str(document_id),
+            refresh="wait_for",
+        )
+    except NotFoundError as exc:
+        if (
+            isinstance(exc.body, dict)
+            and exc.body.get("result") == "not_found"
+        ):
+            return
+        raise
+
