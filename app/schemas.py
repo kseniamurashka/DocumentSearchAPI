@@ -9,3 +9,7 @@ class DocumentResponse(BaseModel):
     rubrics: list[str]
     text: str
     created_date: datetime
+
+
+class ErrorResponse(BaseModel):
+    detail: str

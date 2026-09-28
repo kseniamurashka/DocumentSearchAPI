@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from aiohttp import client_exceptions
 from elastic_transport import TransportError
 from elasticsearch import ApiError, AsyncElasticsearch
 from fastapi import (
@@ -18,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import settings
 from app.database import engine, session_factory
 from app.models import Document
-from app.schemas import DocumentResponse
+from app.schemas import DocumentResponse, ErrorResponse
 from app.search import delete_document_from_index, search_document_ids
 
 @asynccontextmanager
@@ -39,7 +38,15 @@ app = FastAPI(
 )
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    responses={
+        503: {
+            "model": ErrorResponse,
+            "description": "Ошибка обращения к PostgreSQL",
+        },
+    },
+)
 async def health():
     try:
         async with engine.connect() as connection:
@@ -56,6 +63,12 @@ async def health():
 @app.get(
     "/documents/search",
     response_model=list[DocumentResponse],
+    responses={
+        503: {
+            "model": ErrorResponse,
+            "description": "Ошибка обращения к PostgreSQL или Elasticsearch",
+        },
+    },
 )
 async def search_documents(
     request: Request,
@@ -101,6 +114,16 @@ async def search_documents(
 @app.delete(
     "/documents/{document_id}",
     status_code=204,
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "Документ с указанным ID не найден в PostgreSQL",
+        },
+        503: {
+            "model": ErrorResponse,
+            "description": "Ошибка обращения к PostgreSQL или Elasticsearch",
+        },
+    },
 )
 async def delete_document(
     request: Request,
