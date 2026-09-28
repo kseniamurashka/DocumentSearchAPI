@@ -35,6 +35,31 @@ services:
       timeout: 10s
       retries: 20
       start_period: 30s
+  api:
+    build: .
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ELASTICSEARCH_INDEX: ${ELASTICSEARCH_INDEX:-documents}
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        alembic upgrade head &&
+        python -m app.import_documents &&
+        python -m app.index_documents &&
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 volumes:
   postgres_data:
